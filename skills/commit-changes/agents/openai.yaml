@@ -1,0 +1,7 @@
+interface:
+  display_name: "変更をコミット"
+  short_description: "完了した作業単位を確認なしで安全にローカルコミット"
+  default_prompt: "$commit-changes を使って、完了した作業単位をユーザー確認なしでローカルコミットし、リモート操作は行わないでください。"
+
+policy:
+  allow_implicit_invocation: true
