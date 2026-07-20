@@ -1,0 +1,7 @@
+interface:
+  display_name: "日本語技術文書"
+  short_description: "自然で検証可能な日本語技術文書の作成・改訂・レビュー・監査と、日本語版文書の翻訳・同期"
+  default_prompt: "$ja-tech-docs を使って、次の日本語技術文書を整備してください。対象: [ファイルまたは範囲] / 目的: [作成・改訂・レビュー・監査・翻訳・同期のいずれか]"
+
+policy:
+  allow_implicit_invocation: true
