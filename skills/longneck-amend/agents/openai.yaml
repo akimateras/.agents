@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneckタスク再定義"
+  short_description: "description.mdの目的・スコープ・完了条件をユーザー指示で改訂"
+  default_prompt: "$longneck-amend を使って、指定したLongneckタスクの定義を指示どおり改訂してください。"
+
+policy:
+  allow_implicit_invocation: false

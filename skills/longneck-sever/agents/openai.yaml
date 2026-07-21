@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneckタスク破棄"
+  short_description: "知見の永続化成功を確認して指定タスクだけを安全に削除"
+  default_prompt: "$longneck-sever を使って、指定したLongneckタスクを永続化後に削除してください。"
+
+policy:
+  allow_implicit_invocation: false

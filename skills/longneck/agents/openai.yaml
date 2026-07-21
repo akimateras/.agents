@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck"
+  short_description: "Longneckタスクの実行可能な作業を子エージェントで順次進行"
+  default_prompt: "$longneck を使って、指定した .longneck タスクの実行可能な作業を順番に進めてください。"
+
+policy:
+  allow_implicit_invocation: true

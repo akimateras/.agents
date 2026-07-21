@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneckスリム化"
+  short_description: "state.mdとprogress.mdの知見を永続化後に安全にスリム化"
+  default_prompt: "$longneck-flush を使って、指定したLongneckタスクの state.md と progress.md をスリム化してください。"
+
+policy:
+  allow_implicit_invocation: false

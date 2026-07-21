@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck形式修復"
+  short_description: "壊れたLongneck文書の形式を診断しユーザー承認後に最小修復"
+  default_prompt: "$longneck-repair を使って、指定したLongneckタスクの形式エラーを診断し、承認を得て修復してください。"
+
+policy:
+  allow_implicit_invocation: false
