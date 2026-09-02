@@ -1,0 +1,7 @@
+interface:
+  display_name: "コミットメッセージ作成"
+  short_description: "規約と履歴に合わせた言語で書く Conventional Commits 形式のコミットメッセージを作成・レビュー・改善"
+  default_prompt: "$write-commit-messages を使って、Conventional Commits 形式のコミットメッセージを提案してください。"
+
+policy:
+  allow_implicit_invocation: true
