@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck知見永続化"
+  short_description: "Longneck内の知見と外部正本の差分を調べ不足分だけ永続化"
+  default_prompt: "$longneck-persist を使って、指定したタスクの知見を .longneck 外へ永続化してください。"
+
+policy:
+  allow_implicit_invocation: false

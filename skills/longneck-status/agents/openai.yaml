@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck状態確認"
+  short_description: "Longneckタスクの一覧、現在状態、残件数を読み取り専用で確認"
+  default_prompt: "$longneck-status を使って、利用できるLongneckタスクと現在状態を確認してください。"
+
+policy:
+  allow_implicit_invocation: true

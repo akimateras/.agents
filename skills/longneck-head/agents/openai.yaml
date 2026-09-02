@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck Head"
+  short_description: "親から指定された一作業単位を実行し状態と知見を同期"
+  default_prompt: "$longneck-head を使って、親から割り当てられた一作業単位だけを完了してください。"
+
+policy:
+  allow_implicit_invocation: false
