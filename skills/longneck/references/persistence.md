@@ -5,6 +5,7 @@
 - 目的と成功条件
 - 永続化範囲
 - 知見の定義
+- 永続化対象外の宣言
 - 情報源の精査
 - 外部正本とのギャップ分類
 - 保存先の選択
@@ -19,7 +20,8 @@
 エージェント自身が、ギャップ分類の確定、外部変更の適用、終了報告の作成と検証を行う。
 サブエージェントは、ファイルを変更しない読取専用の探索（外部正本の調査、コード検索の
 並列化）に限って起動してよく、探索結果は自分で裏取りする。`full-task` では
-`.longneck/<title>` を削除しても知見を失わない状態を作る。`flush-state-progress` では、
+`.longneck/<title>` を削除しても、「永続化対象外の宣言」により除外した知見を除いて、
+知見を失わない状態を作る。`flush-state-progress` では、
 2文書から除去する知見だけを外へ収束させ、タスク全体の削除可能性は保証しない。
 
 ユーザーが `longneck-persist` を直接起動した場合は、調査を始める前にCLIの `lock` で
@@ -29,7 +31,8 @@
 
 成功条件は次のすべてとする。
 
-- 永続化範囲に含まれるすべての知見が、外部で既に表現済み、または今回の変更で表現された。
+- 永続化範囲に含まれるすべての知見が、外部で既に表現済み、今回の変更で表現された、
+  または「永続化対象外の宣言」により除外された。
 - 外部正本との未解決の矛盾がない。
 - 新しい保存先について必要なユーザー許可を得ている。
 - 永続化先がLongneckのパス、title、内部IDへの逆参照を持たず、自己完結している。
@@ -89,18 +92,42 @@
 メタデータは知見ではない。資格情報、token、秘密鍵、個人情報、顧客実データ、秘密値は
 知見として転記せず、値を表示しない安全手順へ切り替える。
 
+## 永続化対象外の宣言
+
+`description.md` に [task-format.md](task-format.md) の任意セクション `永続化対象外` が
+ある場合、そこに列挙された範囲へ明確に該当する知見を `ephemeral` に分類し、外部
+ギャップの調査と外部への書込みから除く。この除外は `full-task` と
+`flush-state-progress` の両方に適用する。`ephemeral` の知見は、対象の削除または
+2文書からの除去により失われてよい。
+
+- 宣言の根拠は `description.md` のこのセクションだけとする。`state.md`、
+  `progress.md`、`issues.md`、`docs/` の記述、子の報告、知見の重要度の推測を根拠に
+  `ephemeral` へ分類しない。
+- 宣言された範囲に該当するかを確定できない知見は、`ephemeral` にせず通常どおり
+  ギャップを分類する。
+- 重大なセキュリティ、プライバシー、データ損失の懸念は、宣言された範囲に含まれても
+  `ephemeral` にしない。通常どおりギャップを分類し、ユーザーへ通知する。
+- 宣言があっても情報源の精査は省略しない。全情報源を読み、各知見が宣言の範囲に
+  該当するかを個別に判定する。
+- `ephemeral` に該当しない知見が、宣言された範囲の文書や項目を参照して意味、根拠、
+  再現手順を委ねている場合は、参照先のうちその知見の理解に必要な内容を、その知見の
+  一部として扱い `ephemeral` にしない。外部へは参照ではなく内容を自己完結させて
+  書き、宣言された範囲のパスやIDを残さない。
+- この契約の実行中に宣言を追加または変更しない。
+
 ## 情報源の精査
 
 `full-task` では `description.md`、`state.md`、`issues.md`、`docs/` の全ファイルと
 `progress.md` 全体を精査する。`flush-state-progress` では `state.md` と `progress.md` を
-情報源として全文精査し、他のLongneck文書は前節で定めた文脈に限って読む。
+情報源として全文精査し、他のLongneck文書は「永続化範囲」で定めた文脈に限って読む。
 標準形式にないファイル、欠落した必須ファイル、メタデータ不備があっても、通常ファイルとして
 安全に読める内容を `full-task` の内部一覧へ含める。形式不備を理由に知見を捨てない。
 `flush-state-progress` は内容を後で除去するため、`validate` のエラーがあれば開始しない。
 どちらの永続化範囲でもシンボリックリンク、特殊ファイル、読取り不能な項目があり、必要な
 内容を確定できない場合は、永続化を成功扱いにしない。
 
-`progress.md` の純粋な作業記録だけは外部永続化から除外してよい。純粋な作業記録とは、
+「永続化対象外の宣言」による除外のほかに、外部永続化から除外してよいのは、
+`progress.md` の純粋な作業記録だけである。純粋な作業記録とは、
 実施時刻、実行した操作、成功・失敗の履歴など、将来の判断に不要な時系列記録を指す。
 `docs/work-log-archive.md`（`longneck-flush` が退避した作業ログのアーカイブ）も、
 `progress.md` の作業ログと同じ基準で扱う。作業ログの中に判断、理由、再現可能な
@@ -115,7 +142,8 @@
 内部一覧自体を `.longneck` または外部正本へ保存しない。
 
 `flush-state-progress` では、各項目へ `state-management-only`、`work-log-only`、
-`removable-knowledge` の分類も付ける。外部ギャップを調べるのは最後の分類だけとする。
+`removable-knowledge` の分類も付ける。外部ギャップを調べるのは、最後の分類のうち
+`ephemeral` に該当しないものだけとする。
 
 ## 外部正本とのギャップ分類
 
@@ -126,8 +154,9 @@
 - `missing`: 適切な既存正本はあるが、意味が不足している。
 - `conflicting`: Longneckと外部正本の内容が両立せず、どちらが現在正しいか確定できない。
 - `needs-destination`: 既存構造に適切な保存先がない。
-- `work-log-only`: 純粋な作業記録として唯一の除外条件を満たす。
+- `work-log-only`: 純粋な作業記録であり、外部永続化から除外する。
 - `state-management-only`: `longneck-flush` 後もLongneck内で現在のタスク管理に使う情報である。
+- `ephemeral`: 「永続化対象外の宣言」により、外部へ永続化しない知見である。
 
 `state-management-only` は `flush-state-progress` だけで使う。`full-task` では未完了タスク、
 ブロッカー、再開条件も削除後に必要な知見として外部ギャップを調べる。
@@ -184,7 +213,8 @@ Longneckへ追記しない。
 ## 収束性と検証
 
 再調査で永続化対象がすべて `represented` になり、除外項目が永続化範囲に応じて
-`work-log-only` または `state-management-only` に分類され、未解決が0件のときだけ成功とする。
+`work-log-only`、`state-management-only`、または `ephemeral` に分類され、未解決が
+0件のときだけ成功とする。
 成功後に同じLongneck内容と外部状態で再実行した場合、ファイル変更、時刻更新、重複追記を
 発生させない。
 
@@ -192,6 +222,9 @@ Longneckへ追記しない。
 
 - 永続化範囲で定めた全情報源を対象にし、文脈用ファイルから固有知見を混入させていない。
 - 作業ログ中の知見を取りこぼしていない。
+- `ephemeral` に分類した全項目が、`description.md` の `永続化対象外` に列挙された
+  範囲へ明確に該当する。
+- 永続化した知見が、`ephemeral` に分類した内容への参照なしに理解できる。
 - 外部正本に意味の重複や矛盾がなく、Longneckのパス、title、内部IDへの逆参照がない。
 - 新規ファイルは事前許可済みである。
 - 外部変更が既存の用語、構造、検証に適合する。
@@ -216,6 +249,7 @@ represented_items: <count>
 persisted_items: <count>
 retained_state_management_items: <count>
 excluded_work_log_items: <count>
+excluded_ephemeral_items: <count>
 changed_files:
   - <path、またはnone>
 unresolved_gaps:
@@ -229,6 +263,7 @@ verification:
 `persisted` と `already_persisted` は `unresolved_gaps: none` かつ検証成功の場合だけ使う。
 `deletion_ready: true` は `full-task` が成功した場合だけ使い、その他のstatusまたは
 永続化範囲では `false` とする。`retained_state_management_items` は
-`flush-state-progress` だけで使い、`full-task` では `0` とする。二回目以降に変更が
-不要なら `already_persisted` を使う。
+`flush-state-progress` だけで使い、`full-task` では `0` とする。
+`excluded_ephemeral_items` は、`description.md` に `永続化対象外` がなければ `0` とする。
+二回目以降に変更が不要なら `already_persisted` を使う。
 この報告は呼出元へ返すためのものであり、独自の監査ファイルとして保存しない。

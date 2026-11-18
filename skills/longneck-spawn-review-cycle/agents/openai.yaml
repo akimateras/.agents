@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneckレビューサイクル作成"
+  short_description: "レビューと修正を指摘がなくなるまで繰り返すLongneckタスクを作成"
+  default_prompt: "$longneck-spawn-review-cycle を使って、この対象のレビューと修正を繰り返すLongneckタスクを作成してください。"
+
+policy:
+  allow_implicit_invocation: true

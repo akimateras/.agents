@@ -138,6 +138,11 @@ class LongneckCtlTest(unittest.TestCase):
     def task_path(self, *parts: str) -> Path:
         return self.root.joinpath(".longneck", "sample-task", *parts)
 
+    def write_log_body(self, content: str) -> Path:
+        path = self.root / "log-body.md"
+        path.write_text(content, encoding="utf-8")
+        return path
+
     def test_resolve_root_outside_git_uses_start_directory(self) -> None:
         nested = self.root / "nested"
         nested.mkdir()
@@ -1327,6 +1332,116 @@ class LongneckCtlTest(unittest.TestCase):
             any("description.md sections are out of order" in error for error in result.errors)
         )
 
+    def test_ephemeral_section_is_optional_and_must_come_last(self) -> None:
+        self.create()
+        description = self.task_path("description.md")
+        text = description.read_text(encoding="utf-8")
+        section = "\n## 永続化対象外\n\n- `docs/` の作業記録\n"
+
+        description.write_text(text + section, encoding="utf-8")
+        self.assertTrue(longneckctl.validate_task(self.root, "sample-task").ok)
+
+        description.write_text(text + section + section, encoding="utf-8")
+        result = longneckctl.validate_task(self.root, "sample-task")
+        self.assertTrue(
+            any("at most one '## 永続化対象外'" in error for error in result.errors)
+        )
+
+        misplaced = text.replace("\n## 主な作業対象\n", section + "\n## 主な作業対象\n")
+        self.assertNotEqual(text, misplaced)
+        description.write_text(misplaced, encoding="utf-8")
+        result = longneckctl.validate_task(self.root, "sample-task")
+        self.assertTrue(
+            any("after '## 主な作業対象'" in error for error in result.errors)
+        )
+
+    def test_ephemeral_section_heading_with_trailing_space_is_checked(self) -> None:
+        self.create()
+        description = self.task_path("description.md")
+        text = description.read_text(encoding="utf-8")
+        section = "\n## 永続化対象外 \n\n- `docs/` の作業記録\n"
+
+        description.write_text(text + section + section, encoding="utf-8")
+        result = longneckctl.validate_task(self.root, "sample-task")
+        self.assertTrue(
+            any("at most one '## 永続化対象外'" in error for error in result.errors)
+        )
+
+        misplaced = text.replace("\n## 主な作業対象\n", section + "\n## 主な作業対象\n")
+        self.assertNotEqual(text, misplaced)
+        description.write_text(misplaced, encoding="utf-8")
+        result = longneckctl.validate_task(self.root, "sample-task")
+        self.assertTrue(
+            any("after '## 主な作業対象'" in error for error in result.errors)
+        )
+
+    def test_tasks_report_includes_model_line(self) -> None:
+        self.create()
+        self.assertIsNone(
+            longneckctl.tasks_report(self.root, "sample-task")["tasks"][0]["model"]
+        )
+        state = self.task_path("state.md")
+        text = state.read_text(encoding="utf-8")
+        with_model = text.replace(
+            "- 依存関係: なし\n", "- 依存関係: なし\n- モデル: sonnet\n", 1
+        )
+        self.assertNotEqual(text, with_model)
+        state.write_text(with_model, encoding="utf-8")
+        report = longneckctl.tasks_report(self.root, "sample-task")
+        self.assertEqual(report["tasks"][0]["model"], "sonnet")
+        self.assertTrue(longneckctl.validate_task(self.root, "sample-task").ok)
+
+    def test_empty_model_line_reports_no_model(self) -> None:
+        self.create()
+        state = self.task_path("state.md")
+        text = state.read_text(encoding="utf-8")
+        with_model = text.replace(
+            "- 依存関係: なし\n", "- 依存関係: なし\n- モデル:\n", 1
+        )
+        self.assertNotEqual(text, with_model)
+        state.write_text(with_model, encoding="utf-8")
+        report = longneckctl.tasks_report(self.root, "sample-task")
+        self.assertIsNone(report["tasks"][0]["model"])
+
+    def test_duplicate_model_lines_are_an_error(self) -> None:
+        self.create()
+        state = self.task_path("state.md")
+        text = state.read_text(encoding="utf-8")
+        with_models = text.replace(
+            "- 依存関係: なし\n",
+            "- 依存関係: なし\n- モデル: sonnet\n- モデル: opus\n",
+            1,
+        )
+        self.assertNotEqual(text, with_models)
+        state.write_text(with_models, encoding="utf-8")
+        result = longneckctl.validate_task(self.root, "sample-task")
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("multiple モデル lines" in error for error in result.errors)
+        )
+        report = longneckctl.tasks_report(self.root, "sample-task")
+        self.assertTrue(
+            any("multiple モデル lines" in error for error in report["errors"])
+        )
+        self.assertEqual(report["tasks"][0]["model"], "sonnet")
+
+    def test_model_line_after_empty_model_line_is_an_error(self) -> None:
+        self.create()
+        state = self.task_path("state.md")
+        text = state.read_text(encoding="utf-8")
+        with_models = text.replace(
+            "- 依存関係: なし\n",
+            "- 依存関係: なし\n- モデル:\n- モデル: opus\n",
+            1,
+        )
+        self.assertNotEqual(text, with_models)
+        state.write_text(with_models, encoding="utf-8")
+        report = longneckctl.tasks_report(self.root, "sample-task")
+        self.assertTrue(
+            any("multiple モデル lines" in error for error in report["errors"])
+        )
+        self.assertIsNone(report["tasks"][0]["model"])
+
     def test_nameless_decision_and_issue_headings_are_warnings(self) -> None:
         self.create()
         progress = self.task_path("progress.md")
@@ -1377,6 +1492,130 @@ class LongneckCtlTest(unittest.TestCase):
         result = longneckctl.validate_task(self.root, "sample-task")
         self.assertTrue(result.ok, result.errors)
         self.assertIn("task T-0001 has no name in its heading", result.warnings)
+
+    def test_add_log_inserts_event_above_existing_events(self) -> None:
+        self.create()
+        body = self.write_log_body("- 実施: 追記した。\n- 検証: 確認した。\n")
+        result = longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        text = self.task_path("progress.md").read_text(encoding="utf-8")
+        log = text.split("## 作業ログ\n", 1)[1]
+        self.assertTrue(log.startswith(f"\n{result['heading']}\n\n- 実施: 追記した。\n"))
+        self.assertIn(f"- 検証: 確認した。\n\n### {NOW} — T-0001\n", log)
+        self.assertNotIn("初期形式", json.dumps(result, ensure_ascii=False))
+        self.assertEqual(
+            result["fingerprint"], longneckctl.fingerprint_task(self.root, "sample-task")
+        )
+        validation = longneckctl.validate_task(self.root, "sample-task")
+        self.assertTrue(validation.ok, validation.errors)
+
+    def test_add_log_replaces_empty_log_and_accepts_management_subject(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        text = progress.read_text(encoding="utf-8")
+        progress.write_text(
+            text.split("## 作業ログ\n", 1)[0] + "## 作業ログ\n\nなし。\n", encoding="utf-8"
+        )
+        body = self.write_log_body("- 実施: 管理した。\n")
+        result = longneckctl.add_log(self.root, "sample-task", "管理作業", body)
+        updated = progress.read_text(encoding="utf-8")
+        self.assertTrue(updated.endswith(f"## 作業ログ\n\n{result['heading']}\n\n- 実施: 管理した。\n"))
+        self.assertNotIn("なし。\n\n###", updated.split("## 作業ログ\n", 1)[1])
+
+    def test_add_log_rejects_invalid_input_without_changing_progress(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8")
+        good = self.write_log_body("- 実施: 追記した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "メモ", good)
+        heading = self.write_log_body("## 設計判断\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", heading)
+        blank = self.write_log_body("\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", blank)
+        unterminated = self.write_log_body("- 実施: 追記した。")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", unterminated)
+        hash_line = self.write_log_body("#123 を確認した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", hash_line)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_rejects_event_older_than_newest_existing_event(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8").replace(NOW, "2999-01-01T00:00:00+09:00")
+        progress.write_text(before, encoding="utf-8")
+        body = self.write_log_body("- 実施: 追記した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_rejects_progress_without_work_log_section(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8").split("## 作業ログ\n", 1)[0]
+        progress.write_text(before, encoding="utf-8")
+        body = self.write_log_body("- 実施: 追記した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_rejects_section_after_work_log(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8") + "\n## 補足\n\nなし。\n"
+        progress.write_text(before, encoding="utf-8")
+        body = self.write_log_body("- 実施: 追記した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_rejects_unreadable_body_file(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8")
+        missing = self.root / "missing-body.md"
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", missing)
+        binary = self.root / "binary-body.md"
+        binary.write_bytes(b"- \xff\xfe\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", binary)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_rejects_malformed_existing_event_heading(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        before = progress.read_text(encoding="utf-8").replace(
+            f"### {NOW} — T-0001", "### 作成の記録"
+        )
+        progress.write_text(before, encoding="utf-8")
+        body = self.write_log_body("- 実施: 追記した。\n")
+        with self.assertRaises(longneckctl.LongneckError):
+            longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        self.assertEqual(progress.read_text(encoding="utf-8"), before)
+
+    def test_add_log_preserves_progress_permissions(self) -> None:
+        self.create()
+        progress = self.task_path("progress.md")
+        progress.chmod(0o640)
+        body = self.write_log_body("- 実施: 追記した。\n")
+        longneckctl.add_log(self.root, "sample-task", "T-0001", body)
+        self.assertEqual(progress.stat().st_mode & 0o777, 0o640)
+
+    def test_add_log_command_prints_json(self) -> None:
+        self.create()
+        body = self.write_log_body("- 実施: 追記した。\n")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = longneckctl.main(
+                ["add-log", "--root", str(self.root), "--title", "sample-task",
+                 "--subject", "T-0001", "--body-file", str(body)]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("heading", json.loads(output.getvalue()))
 
 
 if __name__ == "__main__":

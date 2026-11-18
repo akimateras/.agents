@@ -30,8 +30,8 @@
   複数あれば概要付き一覧を示して聞き返す。
 - `longneck-status`: 既定で全titleを一覧する。title指定時だけ完全一致で
   詳細表示する。
-- `longneck-spawn`: 新規作成であり既存titleを選択しない。ユーザー指定titleの
-  検証・衝突確認と、未指定時の命名は `task-format.md` に従う。
+- `longneck-spawn` と `longneck-spawn-*`: 新規作成であり既存titleを選択しない。
+  ユーザー指定titleの検証・衝突確認と、未指定時の命名は `task-format.md` に従う。
 - `longneck-amend`: 合意済みのタスク定義を変更するため、完全一致titleの明示指定を
   必須とし、自動選択しない。
 - `longneck-repair`: 合意済み文書の形式を変更するため、完全一致titleの明示指定を

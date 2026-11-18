@@ -83,8 +83,9 @@
    解放するタスクを選ぶ。同数なら最小のtask IDを選ぶ。大きすぎるものは
    調査・分解だけを一単位にする。
 4. 起動直前のGit状態とLongneck fingerprintを記録する。
-5. 同じモデルを継承する新しい子を1つだけ起動し、
-   [worker-contract.md](worker-contract.md) のプロンプト契約、完全一致の
+5. 新しい子を1つだけ起動し、子のモデルは
+   [worker-contract.md](worker-contract.md) の「親の責務」に従って決める。
+   同契約のプロンプト契約、完全一致の
    root/title/task ID、完了条件を含む対象タスク全文（CLIの `tasks` が報告する
    該当タスクの `body`）、コミット方針を渡して
    `$longneck-head` を明示的に使わせる。
@@ -147,6 +148,7 @@
 - 検証と結果
 - ユーザー判断事項または再開条件
 - Longneck文書や成果物へ記録できなかった知見。なければその旨
+- `- モデル:` 行の指定どおりに子を起動できなかったタスクIDとモデル名。なければ省く
 
 タスク完了、文書量、形式エラーを理由に `longneck-persist`、`longneck-flush`、
 `longneck-sever`、`longneck-repair` を自動実行しない。

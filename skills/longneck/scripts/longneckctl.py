@@ -28,6 +28,7 @@ STALE_CREATE_MIN_AGE_SECONDS = 3600
 TASK_ID_PATTERN = re.compile(r"^### (T-[0-9]{4,})\b")
 TASK_HEADING_NAME_PATTERN = re.compile(r"^### (T-[0-9]{4,})(?: — (.+))?$")
 DEPENDENCY_LINE_PATTERN = re.compile(r"^- 依存関係:\s*(.*)$")
+MODEL_LINE_PATTERN = re.compile(r"^- モデル:\s*(.*)$")
 # Lookarounds instead of \b: Japanese prose around an ID ("T-0002の完了後")
 # has no ASCII word boundary, so \b would silently drop the reference.
 TASK_REF_PATTERN = re.compile(r"(?<![A-Za-z0-9-])T-[0-9]{4,}(?![0-9])")
@@ -66,6 +67,9 @@ STATE_PATTERN = re.compile(
 SNAPSHOT_SECTION = "現在のスナップショット"
 STATE_SECTIONS = ("調査待ち", "判断待ち", "実行待ち", "ブロック中")
 DESCRIPTION_SECTIONS = ("目的", "スコープ", "非スコープ", "完了条件", "長期制約", "主な作業対象")
+# Optional description.md section declaring knowledge that persistence must not
+# write outside .longneck. When present it must be the last known section.
+EPHEMERAL_SECTION = "永続化対象外"
 EXECUTABLE_SECTIONS = ("調査待ち", "実行待ち")
 REQUIRED_FILES = ("description.md", "state.md", "progress.md", "issues.md")
 REQUIRED_ENTRIES = frozenset((*REQUIRED_FILES, "docs"))
@@ -431,6 +435,7 @@ def _extract_tasks(text: str) -> list[dict[str, Any]]:
     tasks: list[dict[str, Any]] = []
     section: str | None = None
     current: dict[str, Any] | None = None
+    model_line_seen = False
     for line in text.splitlines():
         if line.startswith("## "):
             section = line[3:].strip()
@@ -438,6 +443,7 @@ def _extract_tasks(text: str) -> list[dict[str, Any]]:
             continue
         if line.startswith("### "):
             current = None
+            model_line_seen = False
             match = TASK_HEADING_NAME_PATTERN.match(line)
             if match and section in STATE_SECTIONS:
                 current = {
@@ -445,7 +451,9 @@ def _extract_tasks(text: str) -> list[dict[str, Any]]:
                     "section": section,
                     "name": match.group(2),
                     "dependencies": None,
+                    "model": None,
                     "extra_dependency_lines": 0,
+                    "extra_model_lines": 0,
                     "body_lines": [line],
                 }
                 tasks.append(current)
@@ -460,6 +468,17 @@ def _extract_tasks(text: str) -> list[dict[str, Any]]:
                     # A second 依存関係 line would be silently ignored by the
                     # dependency analysis, hiding preconditions; reject it.
                     current["extra_dependency_lines"] += 1
+            match = MODEL_LINE_PATTERN.match(line)
+            if match:
+                if not model_line_seen:
+                    # The parent launches the child with this model; an empty
+                    # value means "inherit", the same as an absent line.
+                    current["model"] = match.group(1).strip() or None
+                    model_line_seen = True
+                else:
+                    # Only the first モデル line is used, even when its value
+                    # is empty; a later line would be silently ignored.
+                    current["extra_model_lines"] += 1
     for task in tasks:
         lines = task.pop("body_lines")
         while lines and not lines[-1].strip():
@@ -522,6 +541,11 @@ def _analyze_tasks(
             errors.append(
                 f"task {task['id']} has multiple 依存関係 lines; only the first "
                 "is analyzed, so merge them into one line"
+            )
+        if task["extra_model_lines"]:
+            errors.append(
+                f"task {task['id']} has multiple モデル lines; only the first "
+                "is used, so keep one line"
             )
         raw = task["dependencies"]
         refs = TASK_REF_PATTERN.findall(raw) if raw else []
@@ -730,6 +754,23 @@ def validate_task_path(path: Path, title: str) -> ValidationResult:
             errors.append(
                 "description.md sections are out of order; expected "
                 + ", ".join(DESCRIPTION_SECTIONS)
+            )
+        level_two = [
+            line[3:].strip() for line in description.splitlines() if line.startswith("## ")
+        ]
+        ephemeral_count = level_two.count(EPHEMERAL_SECTION)
+        if ephemeral_count > 1:
+            errors.append(
+                f"description.md must contain at most one '## {EPHEMERAL_SECTION}' "
+                f"heading; found {ephemeral_count}"
+            )
+        elif ephemeral_count == 1 and any(
+            section in DESCRIPTION_SECTIONS
+            for section in level_two[level_two.index(EPHEMERAL_SECTION) + 1 :]
+        ):
+            errors.append(
+                f"description.md must place '## {EPHEMERAL_SECTION}' after "
+                f"'## {DESCRIPTION_SECTIONS[-1]}'"
             )
 
     updated: str | None = None
@@ -1153,6 +1194,74 @@ def repair_docs(root: Path, title: str) -> dict[str, Any]:
         docs.mkdir(mode=0o755)
         created = True
     return {"root": str(root), "title": title, "path": str(docs), "created": created}
+
+
+def add_log(root: Path, title: str, subject: str, body_file: Path) -> dict[str, Any]:
+    """Insert one event at the top of the progress.md work log.
+
+    The caller never has to open progress.md, so a worker that must stay
+    unaware of earlier events can still record its own. The existing log is
+    neither printed nor returned.
+    """
+    if not re.fullmatch(r"T-[0-9]{4,}|管理作業", subject):
+        raise LongneckError(f"subject must be a task ID or 管理作業: {subject}")
+    body_errors: list[str] = []
+    body = _read_utf8(body_file, body_errors)
+    if body is None or body_errors:
+        raise LongneckError("; ".join(body_errors) or f"cannot read {body_file}")
+    body_lines = body.strip("\n").splitlines()
+    if not any(line.strip() for line in body_lines):
+        raise LongneckError("work log body must not be blank")
+    for line in body_lines:
+        # A heading in the body would start a new section or a second event.
+        if line.startswith("#"):
+            raise LongneckError(f"work log body must not contain a line starting with '#': {line}")
+
+    progress = task_directory(root, title) / "progress.md"
+    errors: list[str] = []
+    text = _read_utf8(progress, errors)
+    if text is None or errors:
+        raise LongneckError("; ".join(errors) or f"cannot read progress.md for {title}")
+    lines = text.splitlines()
+    try:
+        start = lines.index("## 作業ログ")
+    except ValueError:
+        raise LongneckError(f"progress.md has no 作業ログ section: {title}") from None
+    rest = lines[start + 1 :]
+    if any(line.startswith("## ") for line in rest):
+        raise LongneckError(f"作業ログ must be the last section: {title}")
+    existing = [line for line in rest if line.strip()]
+    if existing == ["なし。"]:
+        rest = []
+
+    timestamp = now_timestamp()
+    heading = f"### {timestamp} — {subject}"
+    updated = [*lines[: start + 1], "", heading, "", *body_lines]
+    while rest and not rest[0].strip():
+        rest = rest[1:]
+    if rest:
+        updated.extend(["", *rest])
+    order_errors: list[str] = []
+    _validate_log_headings(updated[start + 1 :], order_errors)
+    if order_errors:
+        raise LongneckError("; ".join(order_errors))
+
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".progress.md.tmp-", dir=progress.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write("\n".join(updated) + "\n")
+        os.chmod(temporary_name, progress.stat().st_mode & 0o777)
+        os.replace(temporary_name, progress)
+    except BaseException:
+        if os.path.lexists(temporary_name):
+            os.unlink(temporary_name)
+        raise
+    return {
+        "root": str(root),
+        "title": title,
+        "heading": heading,
+        "fingerprint": fingerprint_task(root, title),
+    }
 
 
 def _validate_creation_spec(raw: dict[str, Any]) -> dict[str, str]:
@@ -1606,6 +1715,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--spec-dir", type=Path, help="directory holding exactly the four .md documents"
     )
 
+    add_log_parser = subparsers.add_parser(
+        "add-log", help="insert one event at the top of the progress.md work log"
+    )
+    add_log_parser.add_argument("--root", type=Path, required=True)
+    add_log_parser.add_argument("--title", required=True)
+    add_log_parser.add_argument(
+        "--subject", required=True, help="task ID (T-0001) or 管理作業"
+    )
+    add_log_parser.add_argument(
+        "--body-file",
+        type=Path,
+        required=True,
+        help="UTF-8 file holding the event body (the list items under the heading)",
+    )
+
     clean = subparsers.add_parser("clean-stale")
     clean.add_argument("--root", type=Path, required=True)
 
@@ -1669,6 +1793,9 @@ def run(arguments: argparse.Namespace) -> int:
         return 0
     if arguments.command == "sever":
         _json_dump(sever_task(root, arguments.title, arguments.expect_fingerprint))
+        return 0
+    if arguments.command == "add-log":
+        _json_dump(add_log(root, arguments.title, arguments.subject, arguments.body_file))
         return 0
     if arguments.command == "repair-docs":
         _json_dump(repair_docs(root, arguments.title))

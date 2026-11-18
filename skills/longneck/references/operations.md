@@ -20,7 +20,8 @@ Git管理の中立性、同時変更の検出と排他を定める。文書の�
 warningとして報告する。このwarningは `longneck-flush` の提案材料であり、
 自動起動やエラーの根拠にしない。
 
-`longneck-flush` は除去予定の知見を外部正本へ先に永続化し、`state.md` を現在のタスク管理、
+`longneck-flush` は除去予定の知見を、`description.md` の `永続化対象外` に該当するものを除いて
+外部正本へ先に永続化し、`state.md` を現在のタスク管理、
 `progress.md` を純粋な作業ログへ縮約する。縮約後も `progress.md` がしきい値を超える
 場合は、古い作業イベントを `docs/work-log-archive.md` へ退避できる（[flush.md](flush.md)
 の「作業ログのアーカイブ」）。`description.md`、`issues.md`、このアーカイブを除く
@@ -66,7 +67,7 @@ warningとして報告する。このwarningは `longneck-flush` の提案材料
   明示的に指示した場合だけ使う。残留の疑いは `list` が報告する `locks` の
   保持者情報と経過時間で判断材料を示し、解除自体はユーザー判断に委ねる。
 - 読み取り専用の `longneck-status` と、原子的な `create` で衝突が防がれる
-  `longneck-spawn` はロックを取得しない。`longneck-head` は親のロックの下で
-  作業するため自分では取得しない。
+  `longneck-spawn` および `longneck-spawn-*` はロックを取得しない。`longneck-head` は
+  親のロックの下で作業するため自分では取得しない。
 - 各スキルは、基準として記録した `fingerprint` との不一致を検出した時点で、
   対象を変更せずに停止する。
