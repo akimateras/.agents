@@ -1,0 +1,7 @@
+interface:
+  display_name: "Longneck大規模リファクタ作成"
+  short_description: "ピン止めした挙動を保って設計から作り直すLongneckタスクを作成"
+  default_prompt: "$longneck-spawn-large-refactor を使って、この対象の大規模なリファクタリングを進めるLongneckタスクを作成してください。"
+
+policy:
+  allow_implicit_invocation: true

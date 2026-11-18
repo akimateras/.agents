@@ -9,9 +9,9 @@
 
 ## 配置の前提
 
-Longneckは10のスキルで構成され、常に一括で配置する。共有契約（この `references/`
+Longneckは11のスキルで構成され、常に一括で配置する。共有契約（この `references/`
 配下）と同梱CLI（`scripts/longneckctl.py`）は `longneck` スキルにだけ同梱され、
-他の9スキルは `../longneck/references/` と `../longneck/scripts/` への相対パスで
+他の10スキルは `../longneck/references/` と `../longneck/scripts/` への相対パスで
 参照する。部分的な配置では各スキルが起動時に不足を検出して停止し、独自契約で
 代用しない。
 
@@ -22,6 +22,8 @@ Longneckは10のスキルで構成され、常に一括で配置する。共有�
 - `longneck-spawn`: 新しいタスク一式を原子的に作成する。
 - `longneck-spawn-review-cycle`: `longneck-spawn` の特殊化。レビューと修正の
   サイクルを指摘がなくなるまで繰り返すタスクを作成する。
+- `longneck-spawn-large-refactor`: `longneck-spawn` の特殊化。ピン止めされた挙動を
+  保ったまま、対象を設計から見直して作り直す大規模なリファクタリングのタスクを作成する。
 - `longneck-status`: 読み取り専用でタスクの一覧と現在状態を表示する。
 - `longneck-amend`: ユーザーの明示指示で `description.md` を改訂し、改訂の帰結
   として必要な `state.md` の整合をユーザー承認のもとで適用する。
